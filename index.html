@@ -59,7 +59,33 @@
     <div id="view-pass" class="card hidden">
       <div class="stack">
         <h2>Pass to <span id="nextPlayerName"></span></h2>
-        <button class="btn btn-primary" id="revealBtn">I'm <span id="revealName"></span></button>
+        <div class="row">
+          <button class="btn btn-primary" id="revealBtn">I'm <span id="revealName"></span></button>
+          <button class="btn" id="viewDeckBtn">View Deck</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-deck" class="card hidden">
+      <div class="stack">
+        <h2>Deck — <span id="deckOwnerName"></span></h2>
+        <div class="stack">
+          <label>Peek & draw</label>
+          <div class="row">
+            <button class="btn" id="drawA">Draw cards from A</button>
+            <button class="btn" id="drawB">Draw cards from B</button>
+            <button class="btn" id="drawC">Draw cards from C</button>
+          </div>
+        </div>
+        <div class="stack">
+          <label>Deck contents</label>
+          <div id="deckList" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:8px"></div>
+        </div>
+        <div class="divider"></div>
+        <div class="row">
+          <button class="btn btn-primary" id="continueToPlay">Continue</button>
+          <button class="btn btn-ghost" id="backToPass">Back</button>
+        </div>
       </div>
     </div>
 
@@ -374,6 +400,31 @@
   // --- Hooks
   $('#startBtn').addEventListener('click', startGame);
   $('#revealBtn').addEventListener('click', ()=> renderPlay());
+  $('#viewDeckBtn').addEventListener('click', ()=>{
+    // show the deck view for the current player
+    const name = state.players[state.turn].name;
+    $('#deckOwnerName').innerText = name;
+    // render deck contents
+    const dl = $('#deckList');
+    dl.innerHTML = '';
+    const deck = state.decks[state.turn] || [];
+    // Show top card first — deck.pop() takes from the end, so iterate from end to start
+    for(let i = deck.length - 1; i >= 0; i--){
+      const c = deck[i];
+      dl.append(el('div',{className:'card', style:'padding:8px; border-radius:10px; background:linear-gradient(180deg,#141826,#1b2130); border:1px solid #2a2f4a'}, [ el('div',{innerText: c.name}), el('div',{className:'vl', innerText: `Value ${c.value}`}) ]));
+    }
+    show(document.getElementById('view-deck'));
+  });
+
+  // Continue from deck view to play as current player
+  $('#continueToPlay').addEventListener('click', ()=>{
+    renderPlay();
+  });
+
+  // Back button returns to pass screen
+  $('#backToPass').addEventListener('click', ()=>{
+    show(V.pass);
+  });
   $('#flipBtn').addEventListener('click', flipTop);
   $('#autoBtn').addEventListener('click', ()=>{ state.autoFlipping ? stopAutoFlip() : startAutoFlip(); });
   $('#endTurnBtn').addEventListener('click', ()=>{ stopAutoFlip(); endTurn(); });
