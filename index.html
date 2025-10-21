@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini Card Game – Pass & Play</title>
+  <style>
+    :root { --bg: #0f1220; --panel:#171a2b; --panel2:#1e2236; --text:#eaf0ff; --muted:#a7b0d6; --accent:#9df2d6; }
+    *{box-sizing:border-box}
+    body {margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background: var(--bg); color: var(--text);}    
+    .wrap {max-width: 820px; margin: 0 auto; padding: 16px;}
+    h1 {font-size: 22px; margin: 8px 0 12px;}
+    h2 {font-size: 18px; margin: 16px 0 8px; color: var(--muted)}
+    .card {background: linear-gradient(180deg, var(--panel), var(--panel2)); border: 1px solid #2a2f4a; border-radius: 16px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.35)}
+    .row {display:flex; gap: 12px; flex-wrap: wrap;}
+    .btn {appearance:none; border:1px solid #2a2f4a; background: #202643; color: var(--text); padding: 12px 14px; border-radius: 12px; font-weight:600; cursor:pointer; touch-action: manipulation;}
+    .btn:hover {filter: brightness(1.1)}
+    .btn[disabled]{opacity:.5; filter:grayscale(1); cursor:not-allowed}
+    .btn-primary{ background: linear-gradient(180deg, #2a4cf0, #1c36c9); border-color:#2d3fa7 }
+    .btn-ghost{ background:transparent }
+    label {display:block; font-size:14px; color: var(--muted); margin-bottom:6px}
+    input, select {width:100%; background:#111525; color:var(--text); border:1px solid #2a2f4a; border-radius:10px; padding:10px 12px}
+    .pill {display:inline-flex; align-items:center; gap:8px; padding:8px 10px; background:#111525; border:1px solid #2a2f4a; border-radius:999px; color:var(--muted)}
+    .stack {display:grid; gap:8px}
+    .grid-3 {display:grid; grid-template-columns: repeat(3, 1fr); gap:8px}
+    .c {min-width:88px; padding:10px; border-radius:14px; background:#12172b; border:1px solid #2a2f4a; text-align:center}
+    .c .nm{font-weight:800; font-size:16px}
+    .c .vl{font-size:12px; color: var(--muted)}
+    .footer {margin-top:24px; color: var(--muted); font-size: 12px}
+    .divider{height:1px; background:#232848; margin:12px 0}
+    .hidden{display:none}
+    .targetBanner{display:flex; flex-direction:column; gap:6px; padding:14px; border:1px solid #2a2f4a; border-radius:16px; background:#0f1631}
+    .targetBanner .big{font-size:28px; font-weight:900; letter-spacing:.5px}
+    .targetBanner .sub{font-size:14px; color: var(--muted)}
+    .accent{color: var(--accent)}
+    .trophy{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:#132b1b; border:1px solid #235c32}
+    .benchLine{font-size:12px; color: var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Mini Card Game – Pass & Play</h1>
+    <div id="view-setup" class="card">
+      <div class="stack">
+        <div>
+          <label>Players (must be multiple of 2)</label>
+          <select id="playerCount">
+            <option selected>2</option>
+            <option>4</option>
+            <option>6</option>
+            <option>8</option>
+          </select>
+        </div>
+        <div class="stack" id="nameFields"></div>
+        <button class="btn btn-primary" id="startBtn">Start game</button>
+      </div>
+    </div>
+
+    <div id="view-pass" class="card hidden">
+      <div class="stack">
+        <h2>Pass to <span id="nextPlayerName"></span></h2>
+        <button class="btn btn-primary" id="revealBtn">I'm <span id="revealName"></span></button>
+      </div>
+    </div>
+
+    <div id="view-play" class="card hidden">
+      <div class="stack">
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <div class="pill">Player: <strong id="curPlayer"></strong></div>
+          <div class="pill">Deck: <strong id="deckLeft"></strong> left</div>
+        </div>
+
+        <div class="targetBanner" id="targetBanner">
+          <div class="big">Score to Beat: <span id="scoreToBeat" class="accent">—</span></div>
+          <div class="sub">Last card: <span id="lastCardName">—</span></div>
+        </div>
+
+        <div class="row">
+          <button class="btn" id="flipBtn">Flip Top Card</button>
+          <button class="btn" id="autoBtn">Auto Flip</button>
+          <button class="btn btn-ghost" id="endTurnBtn">End turn</button>
+          <button class="btn btn-ghost" id="passBtn">Pass</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="stack">
+          <label>Table</label>
+          <div id="table"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="stack">
+          <label>Scores & Benches</label>
+          <div id="scores" class="grid-3"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-over" class="card hidden">
+      <div class="stack">
+        <h2>Game over</h2>
+        <div id="final"></div>
+        <div class="row">
+          <button class="btn" id="restartBtn">Play again</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">Prototype: fully client-side, ideal for testing rules. Upgrade to online multiplayer later.</div>
+  </div>
+
+<script>
+(function(){
+  const $ = sel => document.querySelector(sel);
+  const el = (tag, attrs={}, children=[])=>{ const n = document.createElement(tag); Object.assign(n, attrs); children.forEach(c=> n.append(c)); return n; };
+  const shuffle = arr => { for (let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]] } return arr };
+
+  // --- Config
+  const MAX_BENCH_SLOTS = 3; // number of distinct name piles allowed per player (can tweak)
+
+  // --- State (no hands; per-player decks)
+  const state = { players: [], scores: [], trophies: [], decks: [], discard: [], turn: 0,
+    roundTarget: null, currentTurnSum: 0, currentPlayed: [], consecutivePasses: 0,
+    lastCardObj: null, lastCardOwnerIndex: null, matchWinner: null, benches: [], autoFlipping: false };
+  const V = { setup: $('#view-setup'), pass: $('#view-pass'), play: $('#view-play'), over: $('#view-over') };
+
+  const starterCards = [
+    { name: 'Champion', value: 4, type: 'Starter', tag: '', text: '', copies: 1 },
+    { name: 'Dog', value: 3, type: 'Starter', tag: '', text: '', copies: 2 },
+    { name: 'Talent', value: 2, type: 'Starter', tag: '', text: '', copies: 2 },
+    { name: 'Newcomer', value: 1, type: 'Starter', tag: '', text: '', copies: 3 },
+    { name: 'Kid', value: 1, type: 'Starter', tag: '', text: '', copies: 3 }
+  ];
+
+  function show(view){ [V.setup,V.pass,V.play,V.over].forEach(v=> v.classList.add('hidden')); view.classList.remove('hidden'); }
+
+  function renderNameFields(){
+    const n = parseInt($('#playerCount').value, 10);
+    const box = $('#nameFields');
+    box.innerHTML = '';
+    for(let i=0;i<n;i++){
+      const dv = el('div', {}, [
+        el('label',{innerText:`Player ${i+1} name`} ),
+        el('input',{id:`pname-${i}`, value:`Player ${i+1}`})
+      ]);
+      box.append(dv);
+    }
+  }
+
+  renderNameFields();
+  $('#playerCount').addEventListener('change', renderNameFields);
+
+  function buildDeck(){
+    const deck = [];
+    starterCards.forEach(card => { for(let i=0;i<card.copies;i++) deck.push({...card}); });
+    return shuffle(deck);
+  }
+
+  function startGame(){
+    const n = parseInt($('#playerCount').value,10);
+    if(n % 2 !== 0){ alert('Players must be a multiple of 2'); return }
+
+    state.players = [];
+    state.scores = Array(n).fill(0);
+    state.trophies = Array(n).fill(0);
+    state.benches = Array(n).fill(0).map(()=>({})); // name -> count
+    state.turn = 0;
+    state.discard = [];
+    state.roundTarget = null; state.currentTurnSum = 0; state.currentPlayed = []; state.consecutivePasses = 0; state.lastCardObj = null; state.lastCardOwnerIndex = null; state.matchWinner = null; state.autoFlipping = false;
+
+    for(let i=0;i<n;i++){
+      const name = $(`#pname-${i}`).value.trim() || `Player ${i+1}`;
+      state.players.push({name});
+    }
+
+    // Build per-player decks
+    state.decks = Array(n).fill(0).map(()=> buildDeck());
+
+    show(V.pass);
+    $('#nextPlayerName').innerText = state.players[state.turn].name;
+    $('#revealName').innerText = state.players[state.turn].name;
+  }
+
+  // --- Helpers
+  function benchUniqueCount(bench){ return Object.keys(bench).length; }
+  function addToBenchGeneric(bench, cardName, maxSlots){
+    if(bench[cardName]){ bench[cardName] += 1; return true; }
+    if(benchUniqueCount(bench) < maxSlots){ bench[cardName] = 1; return true; }
+    return false; // no room for a new pile
+  }
+  function addToBench(playerIndex, card){ return addToBenchGeneric(state.benches[playerIndex], card.name, MAX_BENCH_SLOTS); }
+  function deckSum(deck){ return deck.reduce((s,c)=> s + (c?.value||0), 0); }
+
+  // Banner utility
+  function showBanner(message){
+    let banner = document.getElementById('banner');
+    if(!banner){
+      banner = document.createElement('div');
+      banner.id = 'banner';
+      Object.assign(banner.style, { position:'fixed', top:'20px', left:'50%', transform:'translateX(-50%)', padding:'12px 18px', borderRadius:'999px', background:'#213040', border:'1px solid #445b77', color:'#9df2d6', fontSize:'16px', fontWeight:'700', zIndex:'9999' });
+      document.body.appendChild(banner);
+    }
+    banner.textContent = message;
+    banner.style.display = 'block';
+    setTimeout(()=>{ if(banner) banner.remove(); }, 3000);
+  }
+
+  // Core turn actions
+  function previousPlayerIndex(){ return (state.turn - 1 + state.players.length) % state.players.length; }
+
+  function checkCannotBeatDuringTurn(){
+    if(state.roundTarget == null) return false;
+    if(state.currentTurnSum >= state.roundTarget) return false;
+    const deck = state.decks[state.turn];
+    const sumLeft = deck.reduce((s,c)=> s + (c?.value||0), 0);
+    if(deck.length === 0 || (sumLeft + state.currentTurnSum) < state.roundTarget){
+      awardTrophyAndEnd(previousPlayerIndex(), deck.length===0 ? 'opponent ran out of cards' : 'opponent cannot reach the target');
+      return true;
+    }
+    return false;
+  }
+
+  function flipTop(){
+    const deck = state.decks[state.turn];
+    if(!deck.length){ alert('No cards left in your deck.'); return; }
+    const card = deck.pop(); // top of deck
+    state.currentPlayed.push(card);
+    state.currentTurnSum += card.value;
+    if(checkCannotBeatDuringTurn()) return;
+    renderPlay();
+  }
+
+  function endTurn(){
+    if(state.roundTarget == null){
+      if(state.currentPlayed.length !== 1){ alert('Flip exactly one card to set the target.'); return }
+      const last = state.currentPlayed[state.currentPlayed.length-1];
+      state.lastCardObj = last; state.lastCardOwnerIndex = state.turn;
+      state.discard.push(...state.currentPlayed.map(c=>({...c, by: state.players[state.turn].name})));
+      state.currentPlayed = []; state.currentTurnSum = 0; state.roundTarget = last.value; state.consecutivePasses = 0; advanceTurn(); return;
+    }
+    // meet or beat (>=)
+    if(state.currentTurnSum < state.roundTarget){ alert('You must meet or beat the score to end your turn.'); return; }
+
+    // The previous target card is now beaten -> try to move it to its owner's bench
+    if(state.lastCardObj != null && state.lastCardOwnerIndex != null){
+      const placed = addToBench(state.lastCardOwnerIndex, state.lastCardObj);
+      if(!placed){
+        const loserName = state.players[state.lastCardOwnerIndex].name;
+        showBanner(`${loserName} has no more room on their bench and loses the match!`);
+        awardTrophyAndEnd(state.turn, 'bench full');
+        return;
+      }
+    }
+
+    const last = state.currentPlayed[state.currentPlayed.length-1];
+    state.lastCardObj = last; state.lastCardOwnerIndex = state.turn;
+    state.scores[state.turn] += last.value; // scoring rule
+    state.discard.push(...state.currentPlayed.map(c=>({...c, by: state.players[state.turn].name})));
+    state.currentPlayed = []; state.currentTurnSum = 0; state.roundTarget = last.value; state.consecutivePasses = 0; advanceTurn();
+  }
+
+  function passTurn(){
+    if(state.roundTarget == null){ alert('First player must set the target.'); return }
+    // Passing does not change anything; move to next player
+    state.currentPlayed = []; state.currentTurnSum = 0;
+    state.consecutivePasses += 1;
+    if(state.consecutivePasses >= state.players.length){ state.roundTarget = null; state.consecutivePasses = 0; }
+    advanceTurn();
+  }
+
+  function advanceTurn(){
+    state.turn = (state.turn + 1) % state.players.length;
+    show(V.pass);
+    $('#nextPlayerName').innerText = state.players[state.turn].name;
+    $('#revealName').innerText = state.players[state.turn].name;
+  }
+
+  function checkCannotBeatAtStart(){
+    if(state.roundTarget != null && state.currentPlayed.length === 0){
+      const deck = state.decks[state.turn];
+      if(deck.length === 0){
+        const winner = (state.turn - 1 + state.players.length) % state.players.length; // previous player
+        awardTrophyAndEnd(winner, 'opponent ran out of cards');
+        return true;
+      }
+      if(deckSum(deck) < state.roundTarget){
+        const winner = (state.turn - 1 + state.players.length) % state.players.length; // previous player
+        awardTrophyAndEnd(winner, 'opponent cannot reach the target');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function awardTrophyAndEnd(winnerIndex, reason){
+    const trophy = Math.floor(Math.random()*5)+1; // 1..5
+    state.trophies[winnerIndex] += trophy;
+    state.scores[winnerIndex] += trophy;
+    state.matchWinner = { index: winnerIndex, name: state.players[winnerIndex].name, trophy, reason };
+    setTimeout(renderGameOver, 800);
+  }
+
+  function renderPlay(){
+    if(checkCannotBeatAtStart()) return;
+
+    show(V.play);
+    $('#curPlayer').innerText = `${state.players[state.turn].name}`;
+    $('#deckLeft').innerText = state.decks[state.turn].length;
+
+    const t = $('#table');
+    t.innerHTML = '';
+    const last = state.lastCardObj;
+    $('#scoreToBeat').innerText = state.roundTarget==null ? '—' : state.roundTarget;
+    $('#lastCardName').innerText = last ? `${last.name} (${last.value})` : '—';
+
+    t.append(el('div',{className:'pill', innerText:`Current turn sum: ${state.currentTurnSum}`}));
+    if(state.currentPlayed.length){ t.append(el('div',{className:'pill', innerText:`Played this turn: ${state.currentPlayed.map(c=>`${c.name}(${c.value})`).join(' + ')}`})); }
+    if(last){ t.append(el('div',{className:'pill',innerText:`Last to table: ${last.name} (+${last.value})`})); }
+
+    const s = $('#scores');
+    s.innerHTML = '';
+    state.players.forEach((p, i)=>{
+      const tro = state.trophies[i] || 0;
+      const bench = state.benches[i];
+      const benchTags = Object.keys(bench).length ? Object.entries(bench).map(([nm,cnt])=>`${nm}×${cnt}`).join(', ') : '—';
+      s.append(el('div',{className:'c'}, [
+        el('div',{className:'nm', innerText: p.name}),
+        el('div',{className:'vl', innerText: `Score ${state.scores[i]}`}),
+        el('div',{className:'vl', innerText: `Trophies ${tro}`}),
+        el('div',{className:'vl', innerText: `Deck ${state.decks[i].length} left`}),
+        el('div',{className:'benchLine', innerText: `Bench (${benchUniqueCount(bench)}/${MAX_BENCH_SLOTS}): ${benchTags}`})
+      ]));
+    });
+
+    const endBtn = $('#endTurnBtn');
+    const flipBtn = $('#flipBtn');
+    const autoBtn = $('#autoBtn');
+    if(state.roundTarget==null){
+      endBtn.innerText = 'Set Target (end turn)';
+      endBtn.disabled = !(state.currentPlayed.length===1);
+      flipBtn.disabled = state.autoFlipping;
+      autoBtn.innerText = state.autoFlipping ? 'Stop Auto' : 'Auto Flip';
+    } else {
+      endBtn.innerText = 'Lock In (end turn)';
+      endBtn.disabled = !(state.currentTurnSum >= state.roundTarget);
+      flipBtn.disabled = state.autoFlipping;
+      autoBtn.innerText = state.autoFlipping ? 'Stop Auto' : 'Auto Flip';
+    }
+  }
+
+  // Auto flip controller
+  function startAutoFlip(){
+    if(state.autoFlipping) return;
+    state.autoFlipping = true;
+    const loop = ()=>{
+      if(!state.autoFlipping) return;
+      if(state.matchWinner) return; // game ended
+      if(state.roundTarget == null){
+        if(state.currentPlayed.length === 0){ flipTop(); }
+        state.autoFlipping = false; renderPlay(); return;
+      }
+      if(state.currentTurnSum >= state.roundTarget){ state.autoFlipping = false; renderPlay(); return; }
+      flipTop();
+      if(!state.autoFlipping) return;
+      setTimeout(loop, 350);
+    };
+    loop();
+    renderPlay();
+  }
+  function stopAutoFlip(){ state.autoFlipping = false; renderPlay(); }
+
+  // --- Hooks
+  $('#startBtn').addEventListener('click', startGame);
+  $('#revealBtn').addEventListener('click', ()=> renderPlay());
+  $('#flipBtn').addEventListener('click', flipTop);
+  $('#autoBtn').addEventListener('click', ()=>{ state.autoFlipping ? stopAutoFlip() : startAutoFlip(); });
+  $('#endTurnBtn').addEventListener('click', ()=>{ stopAutoFlip(); endTurn(); });
+  $('#passBtn').addEventListener('click', ()=>{ stopAutoFlip(); passTurn(); });
+  $('#restartBtn').addEventListener('click', ()=>{ stopAutoFlip(); show(V.setup); });
+
+  function renderGameOver(){
+    show(V.over);
+    const final = $('#final');
+    final.innerHTML='';
+
+    if(state.matchWinner){
+      const w = state.matchWinner;
+      final.append(el('div',{className:'stack'}, [
+        el('div',{innerHTML:`<strong>Match Winner:</strong> ${w.name}`}),
+        el('div',{innerHTML:`<span class="trophy">🏆 Trophy awarded: +${w.trophy}</span>`}),
+        el('div',{innerHTML: w.reason ? `<em>Reason: ${w.reason}</em>` : ''}),
+        el('div',{className:'divider'}),
+      ]));
+    } else {
+      final.append(el('div',{className:'stack'}, [ el('div',{innerHTML:`<strong>Final Scores</strong>` }), el('div',{className:'divider'}), ]));
+    }
+
+    const rows = state.players.map((p,i)=>({name:p.name, score: state.scores[i], trophies: state.trophies[i]||0, bench: state.benches[i], deckLeft: state.decks[i].length}));
+    rows.sort((a,b)=> b.score - a.score);
+
+    rows.forEach(r=>{ const benchTags = Object.keys(r.bench).length ? Object.entries(r.bench).map(([nm,cnt])=>`${nm}×${cnt}`).join(', ') : '—';
+      final.append(el('div',{className:'row', style:'justify-content:space-between; align-items:center; margin:6px 0'}, [
+        el('div',{className:'pill', innerText:`${r.name}`}),
+        el('div',{className:'pill', innerText:`Score ${r.score}`}),
+        el('div',{className:'pill', innerText:`Trophies ${r.trophies}`}),
+        el('div',{className:'pill', innerText:`Deck ${r.deckLeft} left`}),
+        el('div',{className:'pill', innerText:`Bench ${benchTags}`})
+      ])); });
+  }
+
+  // --- Minimal test harness (runs only with ?test=1)
+  (function runSanityTests(){
+    const params = new URLSearchParams(location.search);
+    if(params.get('test') !== '1') return;
+    const T = [];
+    const mkDeck = arr => arr.map(v=>({value:v}));
+    // Deck reachability tests (order doesn't matter since all positive)
+    T.push(()=> console.assert(deckSum(mkDeck([])) === 0, 'deckSum empty'));
+    T.push(()=> console.assert(deckSum(mkDeck([1,1])) === 2, 'deckSum works'));
+    // cannot beat at start if deck sum < target
+    (function(){
+      const target = 5;
+      console.assert(deckSum(mkDeck([2,2])) < target, 'sum less than target');
+    })();
+    // bench capacity tests
+    (function(){
+      const b = {};
+      console.assert(addToBenchGeneric(b, 'Dog', 3) === true, 'bench add new pile ok');
+      console.assert(addToBenchGeneric(b, 'Dog', 3) === true && b.Dog===2, 'bench stack same name');
+      console.assert(addToBenchGeneric(b, 'Kid', 3) === true, 'bench second pile ok');
+      console.assert(addToBenchGeneric(b, 'Talent', 3) === true, 'bench third pile ok');
+      console.assert(addToBenchGeneric(b, 'Champion', 3) === false, 'bench full blocks new pile');
+    })();
+    console.log('Sanity tests completed');
+  })();
+
+})();
+</script>
+</body>
+</html>
